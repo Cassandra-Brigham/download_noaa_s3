@@ -1,5 +1,5 @@
 #!/bin/bash
-# filepath: /Users/cassandrabrigham/ASU Dropbox/Cassandra Brigham/Mac/Documents/POSTDOC/Code/download_noaa_s3/download_script.sh
+
 
 # Configurable variables (can be overridden via environment variables)
 SMB_SERVER="${SMB_SERVER:-smb.example.com}"
