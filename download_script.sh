@@ -1,4 +1,13 @@
 #!/bin/bash
+# filepath: /Users/cassandrabrigham/ASU Dropbox/Cassandra Brigham/Mac/Documents/POSTDOC/Code/download_noaa_s3/download_script.sh
+
+# Configurable variables (can be overridden via environment variables)
+SMB_SERVER="${SMB_SERVER:-smb.example.com}"
+SMB_SHARE="${SMB_SHARE:-share}"
+SMB_USERNAME="${SMB_USERNAME:-username}"
+SMB_PASSWORD="${SMB_PASSWORD:-password}"
+# Optionally, set a remote base directory on the SMB share (leave empty if not needed)
+SMB_REMOTE_BASE_DIR="${SMB_REMOTE_BASE_DIR:-}"
 
 # Check if a CSV file was provided as an argument
 if [ "$#" -ne 1 ]; then
@@ -56,8 +65,7 @@ tail -n +2 "$csv_file" | while IFS=',' read -r -a fields; do
         no_proto="${url#http://}"
         no_proto="${no_proto#https://}"
 
-        # Remove the domain part to extract the URL path:
-        # If there is a '/', everything after the first slash is the path.
+        # Remove the domain part to extract the URL path (everything after the first slash)
         if [[ "$no_proto" == */* ]]; then
             path_part="${no_proto#*/}"
         else
@@ -69,15 +77,14 @@ tail -n +2 "$csv_file" | while IFS=',' read -r -a fields; do
 
         # Get the directory portion of the URL path
         dir_path=$(dirname "$path_part")
-        # If no directory structure is found, dirname returns ".", so we set it to empty.
+        # If no directory structure is found (dirname returns "."), set it to empty.
         if [ "$dir_path" = "." ]; then
             dir_path=""
         fi
 
-        # Create the directory structure if needed and define the destination path
+        # Create the local directory structure if needed and define destination path
         if [ -n "$dir_path" ]; then
             mkdir -p "$dir_path"
-            smbclient -U Cassandra%FK0OKjV2 //10.206.160.163/at_share --directory cassandra -c "mkdir $dir_path"
             destination="$dir_path/$file_name"
         else
             destination="$file_name"
@@ -86,7 +93,22 @@ tail -n +2 "$csv_file" | while IFS=',' read -r -a fields; do
         echo "Downloading: $url"
         echo "Saving as: $destination"
         curl -o "$destination" "$url"
-        smbclient -U Cassandra%FK0OKjV2 //10.206.160.163/at_share --directory "cassandra/$dir_path" -c "put $destination"
+
+        # Build remote directory path: Prepend SMB_REMOTE_BASE_DIR if set
+        remote_dir="$dir_path"
+        if [ -n "$SMB_REMOTE_BASE_DIR" ]; then
+            remote_dir="$SMB_REMOTE_BASE_DIR/$dir_path"
+        fi
+
+        # Create the remote directory structure if necessary
+        if [ -n "$remote_dir" ]; then
+            smbclient -U "${SMB_USERNAME}%${SMB_PASSWORD}" //"${SMB_SERVER}"/"${SMB_SHARE}" --directory "$SMB_REMOTE_BASE_DIR" -c "mkdir \"$remote_dir\"" 2>/dev/null
+        fi
+
+        # Upload the file using smbclient
+        smbclient -U "${SMB_USERNAME}%${SMB_PASSWORD}" //"${SMB_SERVER}"/"${SMB_SHARE}" --directory "${remote_dir}" -c "put \"$destination\""
+
+        # Remove the local copy after successful upload
         rm "$destination"
     else
         echo "Skipping invalid URL: $url"
